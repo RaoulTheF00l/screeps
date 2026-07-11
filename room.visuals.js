@@ -6,13 +6,17 @@ const roomVisuals = {
 };
 
 function drawColonyStatus(room) {
-    const counts = countCreepsByRole();
+    const counts = countCreepsByRole(room);
 
     const energyText =
         `Energy: ${room.energyAvailable}/${room.energyCapacityAvailable}`;
 
     const creepText =
-        `Creeps: H${counts.harvester} U${counts.upgrader} B${counts.builder}`;
+        `Creeps: ` +
+        `H${counts.harvester} ` +
+        `M${counts.miner} ` +
+        `U${counts.upgrader} ` +
+        `B${counts.builder}`;
 
     room.visual.text(
         energyText,
@@ -59,15 +63,24 @@ function drawColonyStatus(room) {
     }
 }
 
-function countCreepsByRole() {
+function countCreepsByRole(room) {
     const counts = {
         harvester: 0,
+        miner: 0,
         upgrader: 0,
         builder: 0
     };
 
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
+
+        /*
+         * Ignore creeps that currently belong to another room.
+         */
+        if (creep.room.name !== room.name) {
+            continue;
+        }
+
         const role = creep.memory.role;
 
         if (counts[role] !== undefined) {
