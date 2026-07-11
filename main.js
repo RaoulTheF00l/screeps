@@ -10,7 +10,7 @@ const RoadPlanner = require("room.roads");
 
 const ROLE_TARGETS = {
     harvester: 4,
-    miner: 1,
+    miner: 3,
     upgrader: 1,
     builder: 1
 };
