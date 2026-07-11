@@ -48,9 +48,31 @@ function collectEnergy(creep) {
 }
 
 function buildOrUpgrade(creep) {
-    const constructionSite =
-        creep.pos.findClosestByPath(FIND_MY_CONSTRUCTION_SITES);
+   const extensionSites = creep.room.find(
+    FIND_MY_CONSTRUCTION_SITES,
+    {
+        filter: site =>
+            site.structureType ===
+            STRUCTURE_EXTENSION
+    }
+);
 
+const nonRoadSites = creep.room.find(
+    FIND_MY_CONSTRUCTION_SITES,
+    {
+        filter: site =>
+            site.structureType !==
+            STRUCTURE_ROAD
+    }
+);
+
+const constructionSite =
+    creep.pos.findClosestByPath(extensionSites) ||
+    creep.pos.findClosestByPath(nonRoadSites) ||
+    creep.pos.findClosestByPath(
+        FIND_MY_CONSTRUCTION_SITES
+    );
+    S
     if (constructionSite) {
         const result = creep.build(constructionSite);
 

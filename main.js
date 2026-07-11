@@ -2,6 +2,7 @@ const roleHarvester = require("role.harvester");
 const roleUpgrader = require("role.upgrader");
 const roleBuilder = require("role.builder");
 const roleMiner = require("role.miner");
+const roleHauler = require("role.hauler");
 
 const roomVisuals = require("room.visuals");
 const TowerManager = require("room.towers");
@@ -10,7 +11,8 @@ const RoadPlanner = require("room.roads");
 
 const ROLE_TARGETS = {
     harvester: 4,
-    miner: 3,
+    miner: 2,
+    hauler: 1,
     upgrader: 1,
     builder: 1
 };
@@ -145,6 +147,8 @@ function manageCreepPopulation() {
             `Could not spawn ${creepName}: error ${result}`
         );
     }
+
+    
 }
 
 
@@ -174,6 +178,13 @@ function chooseNextRole() {
     }
 
     if (
+        counts.hauler <
+        ROLE_TARGETS.hauler
+    ) {
+        return "hauler";
+    }
+
+    if (
         counts.upgrader <
         ROLE_TARGETS.upgrader
     ) {
@@ -196,11 +207,12 @@ function chooseNextRole() {
  */
 function countCreepsByRole() {
     const counts = {
-        harvester: 0,
-        miner: 0,
-        upgrader: 0,
-        builder: 0
-    };
+    harvester: 0,
+    miner: 0,
+    hauler: 0,
+    upgrader: 0,
+    builder: 0
+};
 
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
@@ -266,15 +278,9 @@ function chooseBody(
     availableEnergy
 ) {
     /*
-     * Dedicated miner bodies prioritize WORK parts.
+     * Miner bodies prioritize WORK.
      */
     if (role === "miner") {
-        /*
-         * 600 energy:
-         * 5 WORK = 500
-         * 1 CARRY = 50
-         * 1 MOVE = 50
-         */
         if (availableEnergy >= 600) {
             return [
                 WORK,
@@ -287,12 +293,6 @@ function chooseBody(
             ];
         }
 
-        /*
-         * 400 energy:
-         * 3 WORK = 300
-         * 1 CARRY = 50
-         * 1 MOVE = 50
-         */
         if (availableEnergy >= 400) {
             return [
                 WORK,
@@ -303,22 +303,55 @@ function chooseBody(
             ];
         }
 
-        /*
-         * Existing harvesters can keep working while
-         * the miner waits for at least 400 energy.
-         */
         return null;
     }
 
     /*
-     * General-purpose creep bodies.
+     * Hauler bodies only need CARRY and MOVE.
      */
-    if (availableEnergy < 200) {
+    if (role === "hauler") {
+        /*
+         * 600 energy
+         * Carries 400 energy.
+         */
+        if (availableEnergy >= 600) {
+            return [
+                CARRY, CARRY, MOVE,
+                CARRY, CARRY, MOVE,
+                CARRY, CARRY, MOVE,
+                CARRY, CARRY, MOVE
+            ];
+        }
+
+        /*
+         * 450 energy
+         * Carries 300 energy.
+         */
+        if (availableEnergy >= 450) {
+            return [
+                CARRY, CARRY, MOVE,
+                CARRY, CARRY, MOVE,
+                CARRY, CARRY, MOVE
+            ];
+        }
+
+        /*
+         * 300 energy
+         * Carries 200 energy.
+         */
+        if (availableEnergy >= 300) {
+            return [
+                CARRY, CARRY, MOVE,
+                CARRY, CARRY, MOVE
+            ];
+        }
+
         return null;
     }
 
     /*
-     * 400 energy
+     * General-purpose bodies for harvesters,
+     * builders, and upgraders.
      */
     if (availableEnergy >= 400) {
         return [
@@ -331,9 +364,6 @@ function chooseBody(
         ];
     }
 
-    /*
-     * 300 energy
-     */
     if (availableEnergy >= 300) {
         return [
             WORK,
@@ -344,14 +374,15 @@ function chooseBody(
         ];
     }
 
-    /*
-     * 200-energy emergency body
-     */
-    return [
-        WORK,
-        CARRY,
-        MOVE
-    ];
+    if (availableEnergy >= 200) {
+        return [
+            WORK,
+            CARRY,
+            MOVE
+        ];
+    }
+
+    return null;
 }
 
 
@@ -362,29 +393,42 @@ function runCreeps() {
     for (const creepName in Game.creeps) {
         const creep = Game.creeps[creepName];
 
-        switch (creep.memory.role) {
-            case "harvester":
-                roleHarvester.run(creep);
-                break;
+        try {
+            switch (creep.memory.role) {
+                case "harvester":
+                    roleHarvester.run(creep);
+                    break;
 
-            case "miner":
-                roleMiner.run(creep);
-                break;
+                case "miner":
+                    roleMiner.run(creep);
+                    break;
 
-            case "upgrader":
-                roleUpgrader.run(creep);
-                break;
+                case "hauler":
+                    roleHauler.run(creep);
+                    break;
 
-            case "builder":
-                roleBuilder.run(creep);
-                break;
+                case "upgrader":
+                    roleUpgrader.run(creep);
+                    break;
 
-            default:
-                console.log(
-                    `${creep.name} has unknown role: ${creep.memory.role}`
-                );
+                case "builder":
+                    roleBuilder.run(creep);
+                    break;
 
-                break;
+                default:
+                    console.log(
+                        `${creep.name} has unknown role: ` +
+                        `${creep.memory.role}`
+                    );
+
+                    break;
+            }
+        } catch (error) {
+            console.log(
+                `[Creep Error] ${creep.name} ` +
+                `(${creep.memory.role}): ` +
+                `${error.stack || error}`
+            );
         }
     }
 }

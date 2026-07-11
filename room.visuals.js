@@ -15,6 +15,7 @@ function drawColonyStatus(room) {
         `Creeps: ` +
         `H${counts.harvester} ` +
         `M${counts.miner} ` +
+        `Ha${counts.hauler} ` +
         `U${counts.upgrader} ` +
         `B${counts.builder}`;
 
@@ -67,20 +68,14 @@ function countCreepsByRole(room) {
     const counts = {
         harvester: 0,
         miner: 0,
+        hauler: 0,
         upgrader: 0,
         builder: 0
     };
 
-    for (const creepName in Game.creeps) {
-        const creep = Game.creeps[creepName];
+    const creeps = room.find(FIND_MY_CREEPS);
 
-        /*
-         * Ignore creeps that currently belong to another room.
-         */
-        if (creep.room.name !== room.name) {
-            continue;
-        }
-
+    for (const creep of creeps) {
         const role = creep.memory.role;
 
         if (counts[role] !== undefined) {
@@ -97,7 +92,9 @@ function drawConstructionProgress(room) {
 
     for (const site of constructionSites) {
         const percentage = Math.floor(
-            site.progress / site.progressTotal * 100
+            site.progress /
+            site.progressTotal *
+            100
         );
 
         room.visual.text(

@@ -26,20 +26,15 @@ const roleMiner = {
          * When there is room in an adjacent container,
          * the miner stands on it and mines continuously.
          */
-        if (
-            container &&
-            container.store.getFreeCapacity(
-                RESOURCE_ENERGY
-            ) > 0
-        ) {
+        if (container) {
             mineIntoContainer(
-                creep,
-                source,
-                container
-            );
+            creep,
+            source,
+            container
+        );
 
-            return;
-        }
+    return;
+}
 
         /*
          * Until a container exists—or while it is full—
