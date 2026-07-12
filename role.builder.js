@@ -72,7 +72,7 @@ const constructionSite =
     creep.pos.findClosestByPath(
         FIND_MY_CONSTRUCTION_SITES
     );
-    S
+    
     if (constructionSite) {
         const result = creep.build(constructionSite);
 
