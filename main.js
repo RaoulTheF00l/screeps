@@ -6,13 +6,11 @@ const roleHauler = require("role.hauler");
 
 const roomVisuals = require("room.visuals");
 const TowerManager = require("room.towers");
-const RoadPlanner = require("room.roads");
+// const RoadPlanner = require("room.roads");
 
 
 const ROLE_TARGETS = {
-    harvester: 4,
-    miner: 2,
-    hauler: 1,
+    harvester: 6,
     upgrader: 1,
     builder: 1
 };
@@ -22,7 +20,6 @@ module.exports.loop = function () {
     cleanDeadCreepMemory();
     manageCreepPopulation();
 
-    runRoadPlanners();
     runCreeps();
     runTowers();
     drawRoomVisuals();
@@ -436,7 +433,7 @@ function runCreeps() {
 
 /*
  * Runs the road planner in every owned room.
- */
+
 function runRoadPlanners() {
     for (const roomName in Game.rooms) {
         const room = Game.rooms[roomName];
@@ -449,6 +446,7 @@ function runRoadPlanners() {
         }
     }
 }
+*/
 
 
 /*
