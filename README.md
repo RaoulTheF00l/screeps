@@ -1,275 +1,349 @@
-# Adventure Land Party Automation
+# Screeps Colony Automation
 
-A modular JavaScript automation system for coordinating a four-character party in [Adventure Land](https://adventure.land/).
+A modular JavaScript colony controller for **Screeps**, built around autonomous creep roles, recovery-focused spawning, infrastructure planning, defensive towers, and live room diagnostics.
 
-The project manages character startup, party formation, combat behavior, healing, movement, inventory logistics, town runs, item progression, and merchant support through a shared, configuration-driven architecture.
+This project is a continuing exercise in designing persistent systems that must manage resources, recover from losses, and make decisions over thousands of game ticks without direct player control.
 
 ## Project Overview
 
-Instead of maintaining a separate copy of the entire automation script for every character, this project uses a shared runtime:
+The colony is controlled through a central game loop in `main.js`.
 
-1. `PartyBoot` starts the configured party members.
-2. Each character loads `PartyRunner`.
-3. `PartyRunner` loads and validates the shared modules.
-4. The character reads its settings from `Config`.
-5. A single main loop routes behavior according to the character's assigned role.
+Each tick, the controller:
 
-This structure keeps shared systems reusable while allowing each party member to behave differently.
+1. Removes memory belonging to dead creeps.
+2. Checks whether the colony needs replacement creeps.
+3. Expands the room's road network incrementally.
+4. dispatches each creep to its assigned role module.
+5. Runs defensive and maintenance towers.
+6. Draws live colony information inside the room.
+
+```text
+Game tick
+   │
+   ├── Clean dead creep memory
+   ├── Maintain creep population
+   ├── Run road planners
+   ├── Execute creep roles
+   ├── Run tower priorities
+   └── Draw room diagnostics
+```
 
 ## Current Features
 
-### Party Management
+### Automated Population Management
 
-* Starts the full party from one boot script
-* Maintains the configured party composition
-* Assigns one character as the party leader
-* Uses shared configuration data for every character
-* Prevents duplicate main loops after script reloads
-* Automatically handles character recovery and respawning
+The spawn manager counts living creeps and creates replacements according to configurable role targets.
 
-### Coordinated Combat
+The current active colony composition is:
 
-* Configurable monster targeting
-* Leader-controlled target selection
-* Party members assist the leader's active target
-* Range and cooldown validation before attacks
-* Movement into attack range
-* Protection against attacking invalid or unintended targets
+| Role      | Target | Responsibility                     |
+| --------- | -----: | ---------------------------------- |
+| Harvester |      4 | Harvest and distribute room energy |
+| Upgrader  |      1 | Upgrade the room controller        |
+| Builder   |      1 | Complete construction projects     |
 
-### Class-Specific Roles
+Harvesters receive first priority because the colony cannot recover without an active energy supply.
 
-#### Mage
+Creep bodies scale according to currently available energy:
 
-* Serves as the current party leader
-* Selects combat targets
-* Controls the party's farming destination
-* Uses offensive combat behavior
+| Available energy | Body                                             |
+| ---------------: | ------------------------------------------------ |
+|          200–299 | `WORK`, `CARRY`, `MOVE`                          |
+|          300–399 | `WORK`, `CARRY`, `CARRY`, `MOVE`, `MOVE`         |
+|             400+ | `WORK`, `WORK`, `CARRY`, `CARRY`, `MOVE`, `MOVE` |
 
-#### Priest
+The 200-energy fallback allows the colony to rebuild after a severe population loss instead of waiting indefinitely for a larger body.
 
-* Monitors the health of every party member
-* Prioritizes the party member with the lowest health percentage
-* Uses separate self-healing and party-healing thresholds
-* Moves into healing range when necessary
-* Assists the leader in combat when healing is not required
+### Harvester Behavior
 
-#### Ranger
+Harvesters alternate between collecting and delivering energy.
 
-* Follows the party leader
-* Assists with the leader's selected target
-* Maintains configurable combat and following distances
-* Uses ranged combat behavior
+Delivery targets include:
 
-#### Merchant
+1. Spawns
+2. Extensions
+3. Towers
 
-* Receives selected loot from combat characters
-* Responds to potion and inventory assistance requests
-* Restocks party supplies
-* Performs independent town runs
-* Sells configured items
-* Returns to the farming location after completing support work
-* Uses merchant skills such as `mluck` when available
+When all eligible structures are full, harvesters use their remaining energy to help upgrade the room controller rather than remaining idle.
 
-## Inventory and Item Progression
+### Builder Behavior
 
-The project includes systems for:
+Builders alternate between collecting energy and completing construction sites.
 
-* Looting nearby chests
-* Counting item quantities
-* Tracking available inventory space
-* Detecting low potion supplies
-* Sending approved loot to the merchant
-* Protecting equipment, scrolls, boosters, and other important items from accidental transfers
-* Automatically compounding whitelisted accessories
-* Automatically upgrading whitelisted equipment
-* Enforcing configurable maximum item levels
-* Preserving a minimum amount of gold before performing upgrades
-* Preventing overlapping asynchronous item actions
+When no construction work remains, builders temporarily assist with controller upgrades. This gives them useful fallback behavior while preserving their primary construction responsibility.
 
-Item progression uses explicit allowlists instead of attempting to upgrade every item automatically.
+### Upgrader Behavior
 
-## Movement and Town Behavior
+Upgraders harvest from active energy sources and continuously invest that energy into the room controller.
 
-Shared movement and town modules handle:
+Their working state is stored in creep memory so they can switch between gathering and upgrading without losing their current behavior between ticks.
 
-* Following the party leader
-* Maintaining configurable party distances
-* Moving into combat or healing range
-* Traveling to configured farming locations
-* Traveling to vendors and upgrade locations
-* Coordinating town requests
-* Restocking potions
-* Selling configured inventory
-* Returning the party to its farming route
+## Road Planning
 
-## Configuration-Driven Design
+`room.roads.js` creates and maintains routes between the room's spawn, energy sources, and controller.
 
-Party and character behavior is defined in `Config.3.js`.
+The planner:
 
-Each character can have individual settings for:
+* Uses `PathFinder` and a custom `CostMatrix`
+* Accounts for terrain, structures, construction sites, minerals, and room objects
+* Encourages later paths to reuse already planned road tiles
+* Avoids duplicate road positions
+* Allows roads beneath owned ramparts
+* Stores its plan and progress in room memory
+* Recalculates when important room conditions change
+* Places construction sites gradually instead of flooding the room
 
-* Role
-* Target monster
-* Main-loop frequency
-* Attack behavior
-* Potion thresholds
-* Healing thresholds
-* Follow distance
-* Town behavior
-* Merchant support
-* Item sell lists
-* Upgrade allowlists
-* Compound allowlists
-* Gold reserves
-* Inventory limits
+### Planner Limits
 
-This allows behavior to be adjusted without rewriting the shared modules.
+The current planner configuration:
 
-## Party Composition
+| Setting                             |          Value |
+| ----------------------------------- | -------------: |
+| Planning interval                   | Every 25 ticks |
+| New road sites per run              |              2 |
+| Maximum pending road sites          |              8 |
+| Global construction-site soft limit |             90 |
 
-| Character     | Role          | Primary Responsibility                        |
-| ------------- | ------------- | --------------------------------------------- |
-| `MageRao`     | Mage / Leader | Target selection and offensive combat         |
-| `PriestRao`   | Priest        | Party healing and combat support              |
-| `RangerRao`   | Ranger        | Ranged damage and leader assistance           |
-| `MerchantRao` | Merchant      | Inventory, supplies, selling, and progression |
+These limits prevent road construction from overwhelming builders or consuming all available construction-site slots.
+
+### Cached Room Signatures
+
+Each road plan is associated with a signature generated from:
+
+* Spawn ID
+* Controller ID
+* Controller level
+* Energy source IDs
+
+When that signature changes, the planner generates a new route plan and resets its construction cursor.
+
+## Tower Management
+
+`room.towers.js` gives every owned tower a clear priority order:
+
+1. Attack hostile creeps
+2. Heal injured friendly creeps
+3. Repair heavily damaged structures
+
+Towers only perform routine repairs when they contain at least 500 energy. This preserves a defensive reserve for attacks and emergency healing.
+
+Walls and ramparts are excluded from automatic repair so towers do not consume their entire energy supply maintaining structures with extremely large hit-point limits.
+
+## Room Diagnostics
+
+`room.visuals.js` displays live colony information directly inside each controlled room.
+
+The current display includes:
+
+* Available and maximum room energy
+* Creep counts by role
+* Room controller level
+* Controller upgrade progress
+* Construction-site completion percentages
+
+These diagnostics make it easier to inspect colony behavior without relying entirely on console output.
+
+## Dedicated Mining and Logistics
+
+The repository also contains dedicated miner and hauler modules that are implemented but not yet connected to the active spawn and role-dispatch system.
+
+### Miner Module
+
+`role.miner.js` supports:
+
+* Persistent source assignment through `creep.memory.sourceId`
+* Detecting containers adjacent to assigned sources
+* Moving onto source containers
+* Continuous stationary harvesting
+* Transferring harvested energy into containers
+* Temporary direct-delivery behavior before containers are available
+
+### Hauler Module
+
+`role.hauler.js` supports:
+
+* Finding containers located beside energy sources
+* Selecting the fullest available source container
+* Withdrawing stored energy
+* Switching between collection and delivery states
+* Delivering partial loads when no more container energy is available
+
+Hauler delivery priority is:
+
+1. Spawns and extensions
+2. Towers
+3. Storage
+
+Integrating these modules will allow the colony to move from general-purpose harvesting toward a more specialized mining and logistics economy.
 
 ## Project Structure
 
 ```text
-adventureland_scripts/
-├── README.md
-├── data.json
-└── adventureland/
-    ├── characters/
-    │   └── Character-specific exported code
-    │
-    ├── codes/
-    │   ├── PartyBoot.1.js
-    │   ├── PartyRunner.2.js
-    │   ├── Config.3.js
-    │   ├── Core.4.js
-    │   ├── Party.5.js
-    │   ├── Movement.6.js
-    │   ├── Combat.7.js
-    │   ├── Inventory.8.js
-    │   ├── RolePriest.9.js
-    │   ├── RoleRanger.10.js
-    │   ├── RoleMage.11.js
-    │   ├── ItemProgression.12.js
-    │   ├── Town.13.js
-    │   ├── Status.14.js
-    │   ├── RoleMerchant.15.js
-    │   ├── SanityCheck.16.js
-    │   ├── Gear.17.js
-    │   └── KillTracker.18.js
-    │
-    └── libraries/
-        ├── common_functions.js
-        ├── default_code.js
-        ├── runner_compat.js
-        └── runner_functions.js
+screeps/
+├── main.js
+│   └── Central game loop, population management, and role dispatch
+│
+├── role.harvester.js
+│   └── General energy harvesting and structure delivery
+│
+├── role.upgrader.js
+│   └── Controller upgrading behavior
+│
+├── role.builder.js
+│   └── Construction behavior with controller fallback
+│
+├── role.miner.js
+│   └── Assigned-source and container-based mining
+│
+├── role.hauler.js
+│   └── Container collection and prioritized energy delivery
+│
+├── room.roads.js
+│   └── Cached, incremental road-network planning
+│
+├── room.towers.js
+│   └── Tower attack, healing, and repair priorities
+│
+├── room.visuals.js
+│   └── Live room status and construction diagnostics
+│
+├── package.json
+│   └── Screeps and Lodash type definitions
+│
+└── .gitignore
+    └── Local packages, credentials, logs, and editor files
 ```
 
-## Module Responsibilities
+## Module Status
 
-| Module            | Responsibility                                          |
-| ----------------- | ------------------------------------------------------- |
-| `PartyBoot`       | Starts each party character and loads the shared runner |
-| `PartyRunner`     | Loads modules and runs the central character loop       |
-| `Config`          | Stores party-wide and character-specific settings       |
-| `Core`            | Handles shared survival and runtime behavior            |
-| `Party`           | Maintains party membership and coordination             |
-| `Movement`        | Handles following, positioning, and travel              |
-| `Combat`          | Selects, validates, approaches, and attacks targets     |
-| `Inventory`       | Handles looting and inventory helper functions          |
-| `RolePriest`      | Selects healing targets and supports combat             |
-| `RoleRanger`      | Controls ranged party-assist behavior                   |
-| `RoleMage`        | Controls leader and mage-specific behavior              |
-| `ItemProgression` | Compounds and upgrades approved items                   |
-| `Town`            | Coordinates selling, restocking, and town travel        |
-| `Status`          | Displays runtime and party information                  |
-| `RoleMerchant`    | Manages supplies, loot transfers, and merchant work     |
-| `SanityCheck`     | Validates expected configuration and dependencies       |
-| `Gear`            | Evaluates and equips approved gear                      |
-| `KillTracker`     | Experiments with tracking defeated targets              |
+| Module              | Status                           |
+| ------------------- | -------------------------------- |
+| `main.js`           | Active                           |
+| `role.harvester.js` | Active                           |
+| `role.upgrader.js`  | Active                           |
+| `role.builder.js`   | Active                           |
+| `room.roads.js`     | Active                           |
+| `room.towers.js`    | Active                           |
+| `room.visuals.js`   | Active                           |
+| `role.miner.js`     | Implemented; integration pending |
+| `role.hauler.js`    | Implemented; integration pending |
 
-## Runtime Flow
+## Running the Project
 
-The shared loop processes behavior in a deliberate order:
+The scripts are intended to run inside the Screeps JavaScript environment.
+
+### Editor Setup
+
+Clone the repository and install the included type definitions:
+
+```bash
+git clone https://github.com/RaoulTheF00l/screeps.git
+cd screeps
+npm install
+```
+
+The installed packages provide Screeps and Lodash type information for compatible editors. They are development dependencies and are not part of the uploaded game code.
+
+### Screeps Setup
+
+Upload or create modules using the same filenames found in this repository:
 
 ```text
-Handle death or respawn
-        ↓
-Loot nearby chests
-        ↓
-Use potions when needed
-        ↓
-Maintain the party
-        ↓
-Update movement
-        ↓
-Request merchant support
-        ↓
-Handle town work
-        ↓
-Run class-specific behavior
+main
+role.harvester
+role.upgrader
+role.builder
+role.miner
+role.hauler
+room.roads
+room.towers
+room.visuals
 ```
 
-Urgent survival, inventory, and town behavior can therefore interrupt normal combat when necessary.
+`main.js` is the entry point used by the Screeps runtime.
 
-## Running the Scripts
-
-These scripts are designed for Adventure Land's in-game code system.
-
-1. Import or create the code slots listed in `data.json`.
-2. Preserve the expected code names, such as `PartyRunner`, `Config`, and `Combat`.
-3. Update the party names and behavior settings in `Config.3.js`.
-4. Update the boot configuration in `PartyBoot.1.js`.
-5. Run `PartyBoot` manually on the configured leader.
-
-The current configuration is written for my own Adventure Land characters and is not intended to be a plug-and-play bot for every account.
+The repository does not currently include an automatic deployment script, so files must be uploaded through the Screeps interface or through a separately configured synchronization tool.
 
 ## Technical Focus
 
 This project demonstrates practical work with:
 
 * Modular JavaScript architecture
-* Configuration-driven behavior
-* Autonomous agents
-* Role-based decision systems
-* Shared state and party coordination
-* Guard clauses and runtime validation
-* Long-running interval loops
-* Asynchronous action control
-* Inventory classification
-* Resource and supply logistics
-* Incremental refactoring
-* Debugging persistent game automation
+* Persistent game state
+* Autonomous agent behavior
+* Priority-based decision systems
+* Recovery and fallback logic
+* Resource distribution
+* Role-based task execution
+* Pathfinding and cost matrices
+* Cached planning data
+* Incremental background work
+* Runtime diagnostics
+* Defensive automation
+* Guard clauses and error handling
+* Long-running simulation code
+
+## Design Priorities
+
+### Recovery Before Optimization
+
+The colony always prioritizes maintaining enough harvesters to recover its energy economy. Affordable creep bodies are available when the room cannot support a larger design.
+
+### Useful Fallback Behavior
+
+Creeps attempt secondary work when their main task is unavailable:
+
+* Harvesters upgrade when structures are full.
+* Builders upgrade when no construction sites exist.
+* Miners can deliver directly before container infrastructure is ready.
+* Haulers preserve carried energy when no structure can receive it.
+
+### Incremental Construction
+
+Road sites are created a few at a time. This avoids filling the construction queue and allows builders to keep pace with planned infrastructure.
+
+### Persistent Planning
+
+Road plans and progress cursors are stored in room memory. The colony does not perform expensive route calculations every tick or lose its progress when the main loop restarts.
+
+### Clear Priorities
+
+Spawning, hauling, and tower behavior use explicit priority orders. This makes their decisions predictable and easier to debug.
 
 ## Current Development
 
-The project is under active development.
+The next major development step is integrating the dedicated miner and hauler modules into the active colony manager.
 
-Current areas of focus include:
+That work will require:
 
-* Improving merchant inventory classification
-* Reducing inventory overflow
-* Safely processing unknown and duplicate items
-* Expanding automatic equipment decisions
-* Improving upgrade and compound rules
-* Strengthening recovery from interrupted town runs
-* Integrating kill tracking with status reporting
-* Continuing to separate large systems into smaller modules
+* Assigning miners to specific energy sources
+* Generating role-specific creep bodies
+* Adding miner and hauler population targets
+* Dispatching both roles from the central loop
+* Preserving emergency harvester recovery behavior
+* Handling rooms before source containers are complete
+* Balancing container income against hauling capacity
+
+Additional planned improvements include:
+
+* Extracting spawn configuration into its own module
+* Adding role-specific body templates
+* Improving energy collection for builders and upgraders
+* Adding automated tests for pure decision functions
+* Adding linting and continuous-integration checks
+* Expanding support for multiple rooms
+* Improving defensive behavior and rampart maintenance
 
 ## Why I Built This
 
-Adventure Land provides a useful environment for practicing JavaScript because the scripts must continue making decisions over long periods of time.
+Screeps provides a useful environment for practicing software development because the program must continue operating without constant manual input.
 
-Small mistakes can cause characters to become separated, attack the wrong target, run out of supplies, fill their inventories, or become trapped in repeated actions. Building this project has required me to think about state, priorities, failure recovery, communication between agents, and maintainable program structure rather than only writing isolated functions.
+A colony can lose workers, run out of energy, accumulate too many construction projects, waste tower energy, or become trapped in ineffective behavior. Building this controller requires thinking about priorities, state transitions, resource flow, recovery, pathfinding, performance, and maintainable program structure.
+
+The goal of this repository is not only to progress through the game, but to gradually develop a colony controller that is understandable, modular, observable, and capable of recovering from failures.
 
 ## Project Status
 
-This is a personal portfolio and learning project. The scripts evolve alongside my characters, and some modules remain experimental or partially integrated.
+This is an active personal learning and portfolio project.
 
-The current system successfully demonstrates a modular foundation for coordinating a persistent automated party.
+The current colony supports automated spawning, three active creep roles, road-network construction, tower management, memory cleanup, and live room diagnostics. Dedicated mining and hauling systems are present and are the next major integration milestone.
