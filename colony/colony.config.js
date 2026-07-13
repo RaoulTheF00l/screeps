@@ -1,7 +1,7 @@
 const ROLE_TARGETS = {
-    harvester: 6,
-    miner: 0,
-    hauler: 0,
+    harvester: 3,
+    miner: 1,
+    hauler: 1,
     upgrader: 1,
     builder: 1
 };
