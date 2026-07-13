@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "@types/lodash": "^4.17.24",
-    "@types/screeps": "^3.4.0"
-  }
-}

@@ -19,3 +19,8 @@ yarn-error.log*
 .vscode/
 .DS_Store
 Thumbs.db
+# Generated build output
+dist/
+
+# Generated build output
+dist/

@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.js"
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.24",
+    "@types/screeps": "^3.4.0"
+  }
+}
